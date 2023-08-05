@@ -1,4 +1,3 @@
-/*
 var CHANNEL_ACCESS_TOKEN = 'KQCjwzmEUTVZM7h634BXGWEY1AKf0+gq7duFhLlr8MsxpYDnGR6LZ8kV451X8tYG8Ljm8H9WC6yVExhPor4ElyP9TVJwnQfreqMlBGjhdR48FDxjgsEGmLz7SYdslVBjyZXh9JcjTxmyfwYJF3QZ2wdB04t89/1O/w1cDnyilFU='; 
 const OPENAI_APIKEY = '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';
 const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('log');
@@ -28,7 +27,7 @@ var replyToken, event
 
 //ポストで送られてくるので、ポストデータ取得
 function doPost(e) {
-//初期処理
+/*初期処理*/
   // LINEBotから送られてきたデータを、プログラムで利用しやすいようにJSON形式に変換する
   event = JSON.parse(e.postData.contents).events[0];
 
@@ -59,41 +58,36 @@ function doPost(e) {
   //新規作成時はシートを初期化
   if(verify.match(botRegExp)){
     all_clear();
+    const write_role=[{"role": "system", "content": botRoleContent }];
+    log_to_sheet("A",write_role);
   }else{
-    ;
+    const write_latest=[{"role": "user", "content": lastMessage}] ;
+    log_to_sheet("A",write_latest);
   }
 
-//初期処理完了
-//ここからAIに投げる質問生成
+/*初期処理完了*/
+/*ここからAIに投げる質問生成*/
   // ChatGPTに渡す会話情報
-  let conversations = [];
+  let conversations;
 
   //スプレッドシートから会話記録の読み込み（B列で確認）
-  //データ取得
-  var currentMemoryContent;
   //最大行数の取得
   const lastRow = logSheet.getLastRow();
   //データがすでに存在する場合、currentMemoryContentに格納
   if(lastRow != 0)
   {
-    currentMemoryContent = logSheet.getRange(1,1,lastRow).getValues();
+    conversations = logSheet.getRange(1,1,lastRow).getValues();
   }else{
     //スプレッドシートにデータがなければconversationsに初期データを追加
-    conversations.push({"role": "system", "content": botRoleContent });
-    currentMemoryContent=[];
+    conversations=[{"role": "system", "content": botRoleContent }];
   }
-
-  //仮
-  for(i=0;i<currentMemoryContent.length;i++){
-    conversations.push(currentMemoryContent[i]);
+    
+  for(i = 0; i < conversations.length; i++ ){
+    log_to_sheet("B", conversations[i]);
   }
-  
-  //新規に作成する場合以外は、ユーザから送信された最新の会話文を追加（botRegExpは会話文に含めない）
-  conversations.push({"role": "user", "content": lastMessage});//array.push(a,b,c,...)でarrayの末尾にa,b,c,..を追加
-  Logger.log(conversations)
-  
-///ここまでAIに投げる質問生成
-//ここからGPTで文章生成
+/*ここまでAIに投げる質問生成*/
+//ここまでデバック済み
+/*ここからGPTで文章生成*/
 
   // レスポンスメッセージを作成（テスト用）
   //let botReply='rp'
@@ -106,12 +100,8 @@ function doPost(e) {
 //ここまでGPTで文章生成
 //ここからGPTの返答を含めた履歴を保存
   // botの会話履歴をアップデートしてシートへ保存
-  newMemoryContent = conversations;
-  newMemoryContent.push({"role": "assistant", "content": botReply});
-  clear_column(1);
-  for(let i = 0; i < newMemoryContent.length; i++ ){
-    log_to_sheet("A", newMemoryContent[i]);
-  }
+  const write_reply=[{"role": "assistant", "content": botReply}]
+  log_to_sheet("A",write_reply)
 //ここまでGPTの返答を含めた履歴を保存
 //ここからLINEに送信する文章生成
 
@@ -194,8 +184,7 @@ function callOpenAIAPI(prompt) {
 
 // openai api動作確認用
 function testOpenAIAPI() {
-  let prompt = [];
-  prompt.push({"role": "system", "content": botRoleContent });
+  let prompt = [{"role": "system", "content": botRoleContent }];
   const result = callOpenAIAPI(prompt);
   log_to_sheet("C",result);
   Logger.log(result);
@@ -239,4 +228,3 @@ function check_to_sheet(column, text) {
   var putRange = column + String(lastRow + 1)
   checkSheet.getRange(putRange).setValue(text);
 }
-*/
