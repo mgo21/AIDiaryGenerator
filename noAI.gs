@@ -1,6 +1,6 @@
 
 var CHANNEL_ACCESS_TOKEN = 'KQCjwzmEUTVZM7h634BXGWEY1AKf0+gq7duFhLlr8MsxpYDnGR6LZ8kV451X8tYG8Ljm8H9WC6yVExhPor4ElyP9TVJwnQfreqMlBGjhdR48FDxjgsEGmLz7SYdslVBjyZXh9JcjTxmyfwYJF3QZ2wdB04t89/1O/w1cDnyilFU='; 
-const OPENAI_APIKEY = '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';
+const OPENAI_APIKEY = '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';
 const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('log');
 
 const OPENAI_MODEL = "gpt-3.5-turbo";
@@ -12,14 +12,14 @@ const botRegExp = new RegExp(/^日記を作成/)
 
 // botにロールプレイをさせる際の制約条件(適宜書き換えてください)
 const botRoleContent = `
-以下の対話をもとに、400字程度の日記を作成して、出力してください。
+対話の内容をもとに、400字程度の日記を作成して、出力してください
 `
 var replyToken, event
 
-const start_comment = '日記の作成を開始します。\nこれからする4つの質問にできるだけ具体的に答えてください。'
+const start_comment = '日記の作成を開始します。\nこれからする4つの質問にできるだけ具体的に答えてください'
 const question = ['今日の出来事を教えてください','それはどこで、誰としましたか？','その出来事に対してどう感じましたか？','最後に、明日の目標を教えてください'];
 
-
+//質問ごとにシートに出力する関数のデバッグ
 function test_sheet_src(lastMessage){
   const lastRow = logSheet.getLastRow();
   console.log(lastRow);
@@ -61,6 +61,39 @@ function test_sheet(){
   test_sheet_src(mes);
 }
 
+function testGenerate(){
+  //スプレッドシートから会話記録の読み込み
+  //データ取得
+  let memContent = [];
+  var mem_dataA;
+  var mem_dataB;
+  //最大行数の取得
+  const numRow = logSheet.getLastRow();
+  mem_dataA = logSheet.getRange(1,1,numRow).getValues();
+  mem_dataB = logSheet.getRange(1,2,numRow).getValues();
+
+  memContent.push({"role": "system", "content": botRoleContent });
+
+  for(i=0;i<numRow;i++)
+  {
+    memContent.push({"role": "assistant", "content": mem_dataA[i] });
+    memContent.push({"role": "user", "content": mem_dataB[i] });
+  }
+  
+  console.log(memContent);
+  
+  
+  // レスポンスメッセージを作成（テスト用）
+  //let textDiary='rp'
+
+  // ChatGPT APIへのリクエストオプションを生成
+  let textDiary = callOpenAIAPI(memContent)
+  console.log(textDiary);
+
+  const varDiary = test_message(textDiary);
+
+}
+
 
 //ポストで送られてくるので、ポストデータ取得
 function doPost(e) {
@@ -92,26 +125,19 @@ function doPost(e) {
   }
 
   const sys_cmd=[{"role": "system", "content": botRoleContent}]
-  let q_cmd=[];
-  let a_cmd=[];
 
 
   //スプレッドシートから会話記録の読み込み（B列で確認）
-  //データ取得
-  var currentMemoryContent;
   //最大行数の取得
   const lastRow = logSheet.getLastRow();
 
-  let text_export=[];
-  let q_export=[];
   if(lastMessage.match(botRegExp)){
   //シートの初期化
     all_clear();
   
   //Q1をJNOS型でシートに保存
     sendMessage = question[0];
-    text_export.push({"role": "assistant", "content": sendMessage});
-    log_to_sheet("A",text_export);
+    log_to_sheet("A",sendMessage);
 
     //Q1をメッセージ送信
     // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
@@ -124,8 +150,7 @@ function doPost(e) {
 
   }else if(lastRow === 4){ //質問終了時
   //AnswerをJNOS型でシートに保存
-    text_export.push({"role": "user", "content": lastMessage});
-    log_to_sheet("B",text_export);
+    log_to_sheet("B",lastMessage);
 
   // メッセージを送信
     sendMessage = '絵日記を作成します';
@@ -139,12 +164,10 @@ function doPost(e) {
 
   }else if(lastRow < 4){  //最大行数が偶数のとき（質問に対する返答が保存されているとき）
   //メッセージ（Answer）をシートに保存
-    text_export.push({"role": "user", "content": lastMessage});
-    log_to_sheet("B",text_export);
+    log_to_sheet("B",lastMessage);
 
   //次の質問をシートに保存
-    q_export.push({"role": "assistant", "content": question[lastRow]});
-    log_to_sheet("A",q_export);
+    log_to_sheet("A",question[lastRow]);
 
   //次の質問を送信
     sendMessage = question[lastRow];
@@ -163,81 +186,37 @@ function doPost(e) {
   }
 
 
-/*
-//初期処理完了
-//質問生成開始
 
-  //スプレッドシートから会話記録の読み込み（B列で確認）
+//QA処理完了
+//日記生成開始
+
+  //スプレッドシートから会話記録の読み込み
   //データ取得
-  var currentMemoryContent;
+  var currentMemoryContent = [];
+  var mem_dataA;
+  var mem_dataB;
   //最大行数の取得
-  const lastRow = logSheet.getLastRow();
-  //最大行数が偶数のとき（質問に対する返答が保存されているとき）
-  if( lastRow % 2 === 0 ) {
-    sendMessage = question[lastRow];
-    
-    // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
-    const linebotClient = new LineBotSDK.Client({ channelAccessToken: CHANNEL_ACCESS_TOKEN });
+  mem_dataA = logSheet.getRange(1,1,4).getValues();
+  mem_dataB = logSheet.getRange(1,2,4).getValues();
 
-    // メッセージを返信
-    messages = test_message(sendMessage);
-    linebotClient.replyMessage(replyToken, messages);
-
-    return ContentService.createTextOutput(JSON.stringify({'content': 'post ok'})).setMimeType(ContentService.MimeType.JSON);
-
-    }else{
-      currentMemoryContent = logSheet.getRange(1,1,lastRow).getValues();
-
-      //スプレッドシートにデータがなければconversationsに初期データを追加
-      conversations.push({"role": "system", "content": botRoleContent });
-      currentMemoryContent=[];
-    }
-  }else{
-    return;
-  }
-
-  //仮
-  for(i=0;i<currentMemoryContent.length;i++){
-    conversations.push(currentMemoryContent[i]);
+  currentMemoryContent.push(sys_cmd);
+  for(i=0;i<numRow;i++)
+  {
+    currentMemoryContent.push(mem_dataA[i]);
+    currentMemoryContent.push(mem_dataB[i]);
   }
   
-  //新規に作成する場合以外は、ユーザから送信された最新の会話文を追加（botRegExpは会話文に含めない）
-  conversations.push({"role": "user", "content": lastMessage});//array.push(a,b,c,...)でarrayの末尾にa,b,c,..を追加
-  Logger.log(conversations)
   
-///ここまでAIに投げる質問生成
-//ここからGPTで文章生成
-
   // レスポンスメッセージを作成（テスト用）
-  //let botReply='rp'
+  //let textDiary='rp'
 
   // ChatGPT APIへのリクエストオプションを生成
-  let botReply = callOpenAIAPI(conversations)
+  let textDiary = callOpenAIAPI(currentMemoryContent)
+  log_to_sheet("C",textDiary);
 
-  const sendmessage = test_message(botReply);
+  const varDiary = test_message(textDiary);
 
 //ここまでGPTで文章生成
-//ここからGPTの返答を含めた履歴を保存
-  // botの会話履歴をアップデートしてシートへ保存
-  newMemoryContent = conversations;
-  newMemoryContent.push({"role": "assistant", "content": botReply});
-  clear_column(1);
-  for(let i = 0; i < newMemoryContent.length; i++ ){
-    log_to_sheet("A", newMemoryContent[i]);
-  }
-//ここまでGPTの返答を含めた履歴を保存
-//ここからLINEに送信する文章生成
-
-  // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
-  const linebotClient = new LineBotSDK.Client({ channelAccessToken: CHANNEL_ACCESS_TOKEN });
-
-  // メッセージを返信
-  linebotClient.replyMessage(replyToken, sendmessage);
-
-  
-  return ContentService.createTextOutput(JSON.stringify({'content': 'post ok'})).setMimeType(ContentService.MimeType.JSON);
-//ここまでLINEに送信する文章生成
-*/
 }
 
 // 動作確認用のオウム返しのメッセージを作成する関数
@@ -308,7 +287,7 @@ function callOpenAIAPI(prompt) {
 // openai api動作確認用
 function testOpenAIAPI() {
   let prompt = [];
-  prompt.push({"role": "system", "content": botRoleContent });
+  prompt.push({"role": "system", "content": botRoleContent },{"role": "assistant", "content": '今日は何をしましたか' },{"role": "assistant", "content": 'システム開発' });
   const result = callOpenAIAPI(prompt);
   log_to_sheet("C",result);
   Logger.log(result);
