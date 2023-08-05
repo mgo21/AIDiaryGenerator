@@ -1,6 +1,5 @@
-
 var CHANNEL_ACCESS_TOKEN = 'KQCjwzmEUTVZM7h634BXGWEY1AKf0+gq7duFhLlr8MsxpYDnGR6LZ8kV451X8tYG8Ljm8H9WC6yVExhPor4ElyP9TVJwnQfreqMlBGjhdR48FDxjgsEGmLz7SYdslVBjyZXh9JcjTxmyfwYJF3QZ2wdB04t89/1O/w1cDnyilFU='; 
-const OPENAI_APIKEY = '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';
+const OPENAI_APIKEY = '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';
 const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('log');
 
 const OPENAI_MODEL = "gpt-3.5-turbo";
@@ -61,7 +60,7 @@ function test_sheet(){
   test_sheet_src(mes);
 }
 
-function testGenerate(){
+function textGenerate(){
   //スプレッドシートから会話記録の読み込み
   //データ取得
   let memContent = [];
@@ -76,21 +75,18 @@ function testGenerate(){
 
   for(i=0;i<numRow;i++)
   {
-    memContent.push({"role": "assistant", "content": mem_dataA[i] });
-    memContent.push({"role": "user", "content": mem_dataB[i] });
+    memContent.push({"role": "assistant", "content": JSON.stringify(mem_dataA[i]) });
+    memContent.push({"role": "user", "content": JSON.stringify(mem_dataB[i]) });
   }
   
   console.log(memContent);
   
   
-  // レスポンスメッセージを作成（テスト用）
-  //let textDiary='rp'
-
   // ChatGPT APIへのリクエストオプションを生成
   let textDiary = callOpenAIAPI(memContent)
   console.log(textDiary);
 
-  const varDiary = test_message(textDiary);
+  return textDiary;
 
 }
 
@@ -124,9 +120,6 @@ function doPost(e) {
     ;
   }
 
-  const sys_cmd=[{"role": "system", "content": botRoleContent}]
-
-
   //スプレッドシートから会話記録の読み込み（B列で確認）
   //最大行数の取得
   const lastRow = logSheet.getLastRow();
@@ -152,13 +145,22 @@ function doPost(e) {
   //AnswerをJNOS型でシートに保存
     log_to_sheet("B",lastMessage);
 
-  // メッセージを送信
-    sendMessage = '絵日記を作成します';
+    //日記生成開始
+    let tDiary = textGenerate();
+    console.log(tDiary);
+    log_to_sheet("C",tDiary);
+    log_to_sheet("D",'step1');
+
+    const varDiary = test_message(tDiary);
+    log_to_sheet("E",'step2');
+
     // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
     const linebotClient = new LineBotSDK.Client({ channelAccessToken: CHANNEL_ACCESS_TOKEN });
+    log_to_sheet("F",'step3');
 
-    messages = test_message(sendMessage);
-    linebotClient.replyMessage(replyToken, messages);
+    // メッセージを返信
+    linebotClient.replyMessage(replyToken, varDiary);
+    log_to_sheet("G",'step4')
 
     return ContentService.createTextOutput(JSON.stringify({'content': 'post ok'})).setMimeType(ContentService.MimeType.JSON);
 
@@ -188,33 +190,6 @@ function doPost(e) {
 
 
 //QA処理完了
-//日記生成開始
-
-  //スプレッドシートから会話記録の読み込み
-  //データ取得
-  var currentMemoryContent = [];
-  var mem_dataA;
-  var mem_dataB;
-  //最大行数の取得
-  mem_dataA = logSheet.getRange(1,1,4).getValues();
-  mem_dataB = logSheet.getRange(1,2,4).getValues();
-
-  currentMemoryContent.push(sys_cmd);
-  for(i=0;i<numRow;i++)
-  {
-    currentMemoryContent.push(mem_dataA[i]);
-    currentMemoryContent.push(mem_dataB[i]);
-  }
-  
-  
-  // レスポンスメッセージを作成（テスト用）
-  //let textDiary='rp'
-
-  // ChatGPT APIへのリクエストオプションを生成
-  let textDiary = callOpenAIAPI(currentMemoryContent)
-  log_to_sheet("C",textDiary);
-
-  const varDiary = test_message(textDiary);
 
 //ここまでGPTで文章生成
 }
