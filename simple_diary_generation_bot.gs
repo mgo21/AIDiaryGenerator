@@ -12,7 +12,7 @@ const OPENAI_MODEL = "gpt-3.5-turbo";
 const OPENAI_SYSTEM_PROMPT = "your prompt";
 // 文章生成時のOpenAIの役割
 const botRoleContent = `
-対話の内容を読みやすい日記形式の文章にして、200字程度で出力してください。
+対話の内容を日記形式の文章にして、読みやすく段落分けし、200字程度で出力してください。
 `
 
 var replyToken, event
