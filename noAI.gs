@@ -1,8 +1,7 @@
-/*
+
 var CHANNEL_ACCESS_TOKEN = 'KQCjwzmEUTVZM7h634BXGWEY1AKf0+gq7duFhLlr8MsxpYDnGR6LZ8kV451X8tYG8Ljm8H9WC6yVExhPor4ElyP9TVJwnQfreqMlBGjhdR48FDxjgsEGmLz7SYdslVBjyZXh9JcjTxmyfwYJF3QZ2wdB04t89/1O/w1cDnyilFU='; 
 const OPENAI_APIKEY = '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';
 const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('log');
-const checkSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('check');
 
 const OPENAI_MODEL = "gpt-3.5-turbo";
 
@@ -13,18 +12,55 @@ const botRegExp = new RegExp(/^日記を作成/)
 
 // botにロールプレイをさせる際の制約条件(適宜書き換えてください)
 const botRoleContent = `
-これから以下の設定に従って対話を繰り返します。
-
-以下の4つのことについて質問をしてください。
-・今日朝起きてから何をしたか。
-・今日の出来事でよかったことと、それに対してどう感じたか
-・今日失敗したことと、それに対してどう感じたか
-・明日の目標
-振り返りが終わったら、それまでの会話をもとに日記を作成して、出力してください。
-
-それでは始めます。まずは今日の出来事について質問をしてください。
+以下の対話をもとに、400字程度の日記を作成して、出力してください。
 `
 var replyToken, event
+
+const start_comment = '日記の作成を開始します。\nこれからする4つの質問にできるだけ具体的に答えてください。'
+const question = ['今日の出来事を教えてください','それはどこで、誰としましたか？','その出来事に対してどう感じましたか？','最後に、明日の目標を教えてください'];
+
+
+function test_sheet_src(lastMessage){
+  const lastRow = logSheet.getLastRow();
+  console.log(lastRow);
+  let text_export=[];
+  let q_export=[];
+  if(lastMessage.match(botRegExp)){
+  //シートの初期化
+    all_clear();
+    console.log('check');
+  
+  //Q1をJNOS型でシートに保存
+    sendMessage = question[0];
+    console.log(sendMessage);
+    text_export.push({"role": "assistant", "content": sendMessage});
+    console.log(text_export);
+    log_to_sheet("A",text_export);
+  
+  }else if(lastRow === 4){ //質問終了時
+  //AnswerをJNOS型でシートに保存
+    text_export.push({"role": "user", "content": lastMessage});
+    log_to_sheet("B",text_export);
+
+  }else if(lastRow < 4){  //最大行数が偶数のとき（質問に対する返答が保存されているとき）
+  //メッセージ（Answer）をシートに保存
+    text_export.push({"role": "user", "content": lastMessage});
+    log_to_sheet("B",text_export);
+
+  //次の質問をシートに保存
+    q_export.push({"role": "assistant", "content": question[lastRow]});
+    log_to_sheet("A",q_export);
+
+  }else{
+    console.log('QA error');
+  }
+}
+
+function test_sheet(){
+  mes='はい';
+  test_sheet_src(mes);
+}
+
 
 //ポストで送られてくるので、ポストデータ取得
 function doPost(e) {
@@ -37,10 +73,9 @@ function doPost(e) {
 
   //入力されたメッセージを取得
   let lastMessage = event.message.text;
-  let verify = lastMessage;
 
   // メッセージ以外(スタンプや画像など)が送られてきた場合は終了
-  if (verify === undefined) {
+  if (lastMessage === undefined) {
     // メッセージ以外(スタンプや画像など)が送られてきた場合
     lastMessage = 'テキスト以外のメッセージは対応していません';
     
@@ -56,31 +91,109 @@ function doPost(e) {
     ;
   }
 
-  //新規作成時はシートを初期化
-  if(verify.match(botRegExp)){
-    all_clear();
-  }else{
-    ;
-  }
+  const sys_cmd=[{"role": "system", "content": botRoleContent}]
+  let q_cmd=[];
+  let a_cmd=[];
 
-//初期処理完了
-//ここからAIに投げる質問生成
-  // ChatGPTに渡す会話情報
-  let conversations = [];
 
   //スプレッドシートから会話記録の読み込み（B列で確認）
   //データ取得
   var currentMemoryContent;
   //最大行数の取得
   const lastRow = logSheet.getLastRow();
-  //データがすでに存在する場合、currentMemoryContentに格納
-  if(lastRow != 0)
-  {
-    currentMemoryContent = logSheet.getRange(1,1,lastRow).getValues();
+
+  let text_export=[];
+  let q_export=[];
+  if(lastMessage.match(botRegExp)){
+  //シートの初期化
+    all_clear();
+  
+  //Q1をJNOS型でシートに保存
+    sendMessage = question[0];
+    text_export.push({"role": "assistant", "content": sendMessage});
+    log_to_sheet("A",text_export);
+
+    //Q1をメッセージ送信
+    // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
+    const linebotClient = new LineBotSDK.Client({ channelAccessToken: CHANNEL_ACCESS_TOKEN });
+
+    messages = test_message(sendMessage); 
+    linebotClient.replyMessage(replyToken, messages);
+
+    return ContentService.createTextOutput(JSON.stringify({'content': 'post ok'})).setMimeType(ContentService.MimeType.JSON);
+
+  }else if(lastRow === 4){ //質問終了時
+  //AnswerをJNOS型でシートに保存
+    text_export.push({"role": "user", "content": lastMessage});
+    log_to_sheet("B",text_export);
+
+  // メッセージを送信
+    sendMessage = '絵日記を作成します';
+    // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
+    const linebotClient = new LineBotSDK.Client({ channelAccessToken: CHANNEL_ACCESS_TOKEN });
+
+    messages = test_message(sendMessage);
+    linebotClient.replyMessage(replyToken, messages);
+
+    return ContentService.createTextOutput(JSON.stringify({'content': 'post ok'})).setMimeType(ContentService.MimeType.JSON);
+
+  }else if(lastRow < 4){  //最大行数が偶数のとき（質問に対する返答が保存されているとき）
+  //メッセージ（Answer）をシートに保存
+    text_export.push({"role": "user", "content": lastMessage});
+    log_to_sheet("B",text_export);
+
+  //次の質問をシートに保存
+    q_export.push({"role": "assistant", "content": question[lastRow]});
+    log_to_sheet("A",q_export);
+
+  //次の質問を送信
+    sendMessage = question[lastRow];
+
+    // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
+    const linebotClient = new LineBotSDK.Client({ channelAccessToken: CHANNEL_ACCESS_TOKEN });
+
+    // メッセージを返信
+    messages = test_message(sendMessage);
+    linebotClient.replyMessage(replyToken, messages);
+
+    return ContentService.createTextOutput(JSON.stringify({'content': 'post ok'})).setMimeType(ContentService.MimeType.JSON);
+
   }else{
-    //スプレッドシートにデータがなければconversationsに初期データを追加
-    conversations.push({"role": "system", "content": botRoleContent });
-    currentMemoryContent=[];
+    console.log('QA error');
+  }
+
+
+/*
+//初期処理完了
+//質問生成開始
+
+  //スプレッドシートから会話記録の読み込み（B列で確認）
+  //データ取得
+  var currentMemoryContent;
+  //最大行数の取得
+  const lastRow = logSheet.getLastRow();
+  //最大行数が偶数のとき（質問に対する返答が保存されているとき）
+  if( lastRow % 2 === 0 ) {
+    sendMessage = question[lastRow];
+    
+    // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
+    const linebotClient = new LineBotSDK.Client({ channelAccessToken: CHANNEL_ACCESS_TOKEN });
+
+    // メッセージを返信
+    messages = test_message(sendMessage);
+    linebotClient.replyMessage(replyToken, messages);
+
+    return ContentService.createTextOutput(JSON.stringify({'content': 'post ok'})).setMimeType(ContentService.MimeType.JSON);
+
+    }else{
+      currentMemoryContent = logSheet.getRange(1,1,lastRow).getValues();
+
+      //スプレッドシートにデータがなければconversationsに初期データを追加
+      conversations.push({"role": "system", "content": botRoleContent });
+      currentMemoryContent=[];
+    }
+  }else{
+    return;
   }
 
   //仮
@@ -124,7 +237,7 @@ function doPost(e) {
   
   return ContentService.createTextOutput(JSON.stringify({'content': 'post ok'})).setMimeType(ContentService.MimeType.JSON);
 //ここまでLINEに送信する文章生成
-
+*/
 }
 
 // 動作確認用のオウム返しのメッセージを作成する関数
@@ -220,23 +333,3 @@ function log_to_sheet(column, text) {
   var putRange = column + String(lastRow + 1)
   logSheet.getRange(putRange).setValue(text);
 }
-
-// 処理の確認用にログを出力する関数
-function check_to_sheet(column, text) {
-  if(checkSheet.getRange(column + "1").getValue() == ""){
-    lastRow = 0
-  } else if(checkSheet.getRange(column + "2").getValue() == ""){
-    lastRow = 1
-  } else {
-    var lastRow = checkSheet.getRange(column + "1").getNextDataCell(SpreadsheetApp.Direction.DOWN).getRow();
-    // 無限に増えるので1000以上書き込んだらリセット
-    console.log("lastRow", lastRow)
-    if(lastRow >= 1000){
-      checkSheet.getRange(column + "1:" + column + "10").clearContent()
-      lastRow = 0
-    }
-  }
-  var putRange = column + String(lastRow + 1)
-  checkSheet.getRange(putRange).setValue(text);
-}
-*/
