@@ -80,13 +80,12 @@ function testOpenAIAPI() {
   let prompt = [];
   prompt.push({"role": "system", "content": botRoleContent },{"role": "assistant", "content": '今日は何をしましたか' },{"role": "assistant", "content": 'システム開発' });
   const result = callOpenAIAPI(prompt);
-  log_to_sheet("C",result);
   Logger.log(result);
 }
 
 
 // 処理の確認用にログを出力する関数
-function log_to_sheet(column, text) {
+function check_sheet_row(column) {
   if(logSheet.getRange(column + "1").getValue() == ""){
     lastRow = 0
   } else if(logSheet.getRange(column + "2").getValue() == ""){
@@ -100,8 +99,18 @@ function log_to_sheet(column, text) {
       lastRow = 0
     }
   }
-  var putRange = column + String(lastRow + 1)
+  numNewRow=lastRow+1;
+  return numNewRow;
+}
+
+function push_to_sheet(column,row,text){
+  var putRange = column + String(row);
   logSheet.getRange(putRange).setValue(text);
+}
+
+function log_to_sheet(column,text){
+  row = check_sheet_row(column);
+  push_to_sheet(column,row,text);
 }
 
 
@@ -163,6 +172,8 @@ function doPost(e) {
   }else{
     ;
   }
+
+  const pushRow=check_sheet_row(A);
 //初期処理終了
 //QA処理開始
   //最大行数の取得
@@ -193,19 +204,19 @@ function doPost(e) {
     //日記生成開始
     let tDiary = textGenerate();
     console.log(tDiary);
-    log_to_sheet("C",tDiary);
-    log_to_sheet("D",'step1');
+    //log_to_sheet("C",tDiary);
+    //log_to_sheet("D",'step1');
 
     const varDiary = test_message(tDiary);
-    log_to_sheet("E",'step2');
+    //log_to_sheet("E",'step2');
 
     // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
     const linebotClient = new LineBotSDK.Client({ channelAccessToken: CHANNEL_ACCESS_TOKEN });
-    log_to_sheet("F",'step3');
+    //log_to_sheet("F",'step3');
 
     // メッセージを返信
     linebotClient.replyMessage(replyToken, varDiary);
-    log_to_sheet("G",'step4')
+    //log_to_sheet("G",'step4')
 
     return ContentService.createTextOutput(JSON.stringify({'content': 'post ok'})).setMimeType(ContentService.MimeType.JSON);
 
