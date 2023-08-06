@@ -1,17 +1,15 @@
 {
   "timeZone": "Asia/Tokyo",
   "dependencies": {
-    "libraries": [
-      {
-        "userSymbol": "LineBotSDK",
-        "libraryId": "1EvYoqrPLkKgsV8FDgSjnHjW1jLp3asOSfDGEtLFO86pPSIm9PbuCQU7b",
-        "version": "5"
-      }
-    ]
+    "libraries": [{
+      "userSymbol": "LineBotSDK",
+      "libraryId": "1EvYoqrPLkKgsV8FDgSjnHjW1jLp3asOSfDGEtLFO86pPSIm9PbuCQU7b",
+      "version": "5"
+    }]
   },
   "webapp": {
-    "executeAs": "USER_DEPLOYING",
-    "access": "ANYONE_ANONYMOUS"
+    "access": "ANYONE_ANONYMOUS",
+    "executeAs": "USER_DEPLOYING"
   },
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8"
