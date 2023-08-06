@@ -103,6 +103,19 @@ function check_sheet_row(column) {
   return numNewRow;
 }
 
+function newUser(){
+  column="A";
+  check=1;
+  target = 0;
+  while(check>60){
+    if(logSheet.getRange(column + String(check)).getValue() == ""){
+      target = check;
+    }else{
+      check=check+4;
+    }
+  }
+}
+
 function push_to_sheet(column,row,text){
   var putRange = column + String(row);
   logSheet.getRange(putRange).setValue(text);
