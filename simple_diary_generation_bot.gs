@@ -1,18 +1,22 @@
+const IMAGE_GENERATION_URL = 'https://api.openai.com/v1/images/generations';
+const FOLDER_ID = PropertiesService.getScriptProperties().getProperty('FOLDER_ID');
+const imageFolder = DriveApp.getFolderById(FOLDER_ID);
+
 //リンクしているスプレッドシート
 const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('log');
 
 //LINEのMessagingAPI
-var CHANNEL_ACCESS_TOKEN = 'KQCjwzmEUTVZM7h634BXGWEY1AKf0+gq7duFhLlr8MsxpYDnGR6LZ8kV451X8tYG8Ljm8H9WC6yVExhPor4ElyP9TVJwnQfreqMlBGjhdR48FDxjgsEGmLz7SYdslVBjyZXh9JcjTxmyfwYJF3QZ2wdB04t89/1O/w1cDnyilFU='; 
+var CHANNEL_ACCESS_TOKEN = PropertiesService.getScriptProperties().getProperty('CHANNEL_ACCESS_TOKEN'); 
 // botがLINEメッセージに反応する条件（ウェイクワード）を正規表現で指定
 const botRegExp = new RegExp(/^日記を作成/)
 
 //OpenAI APIの設定
-const OPENAI_APIKEY = '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';
+const OPENAI_APIKEY = PropertiesService.getScriptProperties().getProperty('OPENAI_APIKEY');
 const OPENAI_MODEL = "gpt-3.5-turbo";
 const OPENAI_SYSTEM_PROMPT = "your prompt";
 // 文章生成時のOpenAIの役割
 const botRoleContent = `
-対話の内容を日記形式の文章にして、読みやすく段落分けし、200字程度で出力してください。
+対話の内容を日記形式の文章にして、読みやすく段落分けし、100字程度で出力してください。
 `
 
 var replyToken, event
@@ -80,12 +84,14 @@ function testOpenAIAPI() {
   let prompt = [];
   prompt.push({"role": "system", "content": botRoleContent },{"role": "assistant", "content": '今日は何をしましたか' },{"role": "assistant", "content": 'システム開発' });
   const result = callOpenAIAPI(prompt);
+  console.log(typeof(result));
+  log_to_sheet("C",result);
   Logger.log(result);
 }
 
 
 // 処理の確認用にログを出力する関数
-function check_sheet_row(column) {
+function log_to_sheet(column, text) {
   if(logSheet.getRange(column + "1").getValue() == ""){
     lastRow = 0
   } else if(logSheet.getRange(column + "2").getValue() == ""){
@@ -99,31 +105,8 @@ function check_sheet_row(column) {
       lastRow = 0
     }
   }
-  numNewRow=lastRow+1;
-  return numNewRow;
-}
-
-function newUser(){
-  column="A";
-  check=1;
-  target = 0;
-  while(check>60){
-    if(logSheet.getRange(column + String(check)).getValue() == ""){
-      target = check;
-    }else{
-      check=check+4;
-    }
-  }
-}
-
-function push_to_sheet(column,row,text){
-  var putRange = column + String(row);
+  var putRange = column + String(lastRow + 1)
   logSheet.getRange(putRange).setValue(text);
-}
-
-function log_to_sheet(column,text){
-  row = check_sheet_row(column);
-  push_to_sheet(column,row,text);
 }
 
 
@@ -169,14 +152,14 @@ function doPost(e) {
   //入力されたメッセージを取得
   let lastMessage = event.message.text;
 
+  // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
+  const linebotClient = new LineBotSDK.Client({ channelAccessToken: CHANNEL_ACCESS_TOKEN });
+
   // メッセージ以外(スタンプや画像など)が送られてきた場合は終了
   if (lastMessage === undefined) {
     // メッセージ以外(スタンプや画像など)が送られてきた場合
     lastMessage = 'テキスト以外のメッセージは対応していません';
     
-    // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
-    const linebotClient = new LineBotSDK.Client({ channelAccessToken: CHANNEL_ACCESS_TOKEN });
-
     // メッセージを返信
     messages = test_message(lastMessage);
     linebotClient.replyMessage(replyToken, messages);
@@ -185,8 +168,6 @@ function doPost(e) {
   }else{
     ;
   }
-
-  const pushRow=check_sheet_row(A);
 //初期処理終了
 //QA処理開始
   //最大行数の取得
@@ -202,8 +183,6 @@ function doPost(e) {
     log_to_sheet("A",sendMessage);
 
     //Q1をメッセージ送信
-    // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
-    const linebotClient = new LineBotSDK.Client({ channelAccessToken: CHANNEL_ACCESS_TOKEN });
 
     messages = test_message(sendMessage); 
     linebotClient.replyMessage(replyToken, messages);
@@ -215,21 +194,23 @@ function doPost(e) {
     log_to_sheet("B",lastMessage);
 
     //日記生成開始
-    let tDiary = textGenerate();
+    tDiary = textGenerate();
+    /*
+    ann='日記を作成しました。しばらくお待ちください。';
+    const annou=test_message(ann);
+    linebotClient.replyMessage(replyToken,annou);
+    */
     console.log(tDiary);
-    //log_to_sheet("C",tDiary);
-    //log_to_sheet("D",'step1');
+    log_to_sheet("C",tDiary);
+    log_to_sheet("D",'step1');
+    imageUrl=ilustlation(tDiary);
 
-    const varDiary = test_message(tDiary);
-    //log_to_sheet("E",'step2');
-
-    // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
-    const linebotClient = new LineBotSDK.Client({ channelAccessToken: CHANNEL_ACCESS_TOKEN });
-    //log_to_sheet("F",'step3');
+    const varDiary = test_message(imageUrl);
+    log_to_sheet("E",'step2');
 
     // メッセージを返信
     linebotClient.replyMessage(replyToken, varDiary);
-    //log_to_sheet("G",'step4')
+    log_to_sheet("F",'step3')
 
     return ContentService.createTextOutput(JSON.stringify({'content': 'post ok'})).setMimeType(ContentService.MimeType.JSON);
 
@@ -243,9 +224,6 @@ function doPost(e) {
     //次の質問を送信
     sendMessage = question[lastRow];
 
-    // line-bot-sdk-gas のライブラリを利用しています ( https://github.com/kobanyan/line-bot-sdk-gas )
-    const linebotClient = new LineBotSDK.Client({ channelAccessToken: CHANNEL_ACCESS_TOKEN });
-
     // メッセージを返信
     messages = test_message(sendMessage);
     linebotClient.replyMessage(replyToken, messages);
@@ -257,4 +235,84 @@ function doPost(e) {
   }
 
 //QA処理完了
+}
+
+function ill_test(){
+  tet='きれいな花';
+  console.log(typeof(tet));
+  ilustlation(tet);
+}
+
+// メイン処理
+function ilustlation(textDiary) {
+  const translatedText = translateJaToEn(textDiary);
+  console.log(translatedText);
+  const url = generateImage(translatedText);
+  const driveUrl = downloadImageFromOpenAiServer(url);
+  console.log(typeof(driveUrl));
+  return url;
+}
+
+// 画像生成
+function generateImage(text) {
+  const options = {
+    "method" : "get",
+    'contentType': 'application/json',
+    "headers": { "Authorization":"Bearer " + OPENAI_APIKEY },
+    "payload": JSON.stringify({
+      prompt: text,
+      n: 1,                   //デフォルトと同じであれば省略可
+      size: "256x256",      //デフォルトと同じであれば省略可
+      response_format: "url"  //デフォルトと同じであれば省略可
+    })
+  }
+  const response = UrlFetchApp.fetch(IMAGE_GENERATION_URL, options);
+  const imageUrl = JSON.parse(response.getContentText()).data[0].url;
+  console.log(imageUrl);
+  return imageUrl;
+}
+
+// Open AIサーバーから画像ダウンロードしてGoogle Driveに保存
+function downloadImageFromOpenAiServer(imageUrl) {
+  const response = UrlFetchApp.fetch(imageUrl);
+  const blob = response.getBlob();  
+  let newFile = imageFolder.createFile(blob);
+  newFile.setName(Date.now());
+  return newFile.getDownloadUrl();
+}
+
+
+// 日本語から英語に変換
+function translateJaToEn(text) {
+  return LanguageApp.translate(text, 'ja', 'en');
+}
+
+function getTodayDate() {
+  //Dateオブジェクトからインスタンスを生成
+  const today = new Date();
+  //メソッドを使って、本日の日付を取得
+  const year = today.getFullYear(); //年
+  const month = today.getMonth()+1; //月
+  const date = today.getDate(); //日
+  const day = today.getDay(); //曜日
+  const dayArray = ["日","月","火","水","木","金","土"]; //曜日の配列
+  txtDate=String(year) + "年" + String(month) + "月" + String(date) + "日" + String(dayArray[day]) + "曜日の日記"
+  Logger.log(year + "年" + month + "月" + date + "日" + dayArray[day]);
+  return textDate;
+}
+function genDocument(txtdiary) {
+  toDay=getTodayDate();
+  var doc = DocumentApp.create("DIARY"+toDay);
+  var body = doc.getBody();
+  var paragraphs = body.getParagraphs();
+  var p1 = paragraphs[0]
+  // 本文作成
+  body.appendParagraph("----------------------------------------------------------------------------------------------------");
+  p1.appendText(toDay+"曜日の日記");
+  p1.appendText(txtdiary);
+}
+
+function check_doc(){
+  text='aiueo';
+  genDocument(text);
 }
